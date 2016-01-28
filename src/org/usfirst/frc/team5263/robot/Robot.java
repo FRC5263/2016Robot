@@ -1,6 +1,7 @@
 
 package org.usfirst.frc.team5263.robot;
 
+import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.Encoder;
@@ -8,8 +9,12 @@ import edu.wpi.first.wpilibj.IterativeRobot;
 
 import edu.wpi.first.wpilibj.Jaguar;
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.Servo;
 import edu.wpi.first.wpilibj.Solenoid;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.Ultrasonic;
+import edu.wpi.first.wpilibj.interfaces.Gyro;
+import edu.wpi.first.wpilibj.networktables.NetworkTable;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -33,8 +38,9 @@ public class Robot extends IterativeRobot {
     AnalogInput pot;
     Compressor mainCompressor;
     Solenoid solenoid;
-    
-	
+    Servo servo1;
+    ADXRS450_Gyro gyro1;
+    NetworkTable grip = NetworkTable.getTable("grip");
     /**
      * This function is run when the robot is first started up and should be
      * used for any initialization code.
@@ -49,6 +55,7 @@ public class Robot extends IterativeRobot {
         motor1 = new Jaguar(1);
         
         ultrasonic = new Ultrasonic(0, 1);
+        
         ultrasonic.setAutomaticMode(true);
         
         encoder = new Encoder(2, 3, false, Encoder.EncodingType.k1X);
@@ -59,6 +66,10 @@ public class Robot extends IterativeRobot {
         //mainCompressor = new Compressor(0);
         //mainCompressor.start();
         //solenoid = new Solenoid(0);
+        
+        servo1 = new Servo(9);
+        
+        gyro1 = new ADXRS450_Gyro();
     }
     
 	/**
@@ -98,10 +109,11 @@ public class Robot extends IterativeRobot {
     	motor.set(stick.getRawAxis(1));
     	motor1.set(stick.getRawAxis(5));
     	
-    	
     	SmartDashboard.putNumber("Sensor", ultrasonic.getRangeInches());
     	SmartDashboard.putNumber("Encoder: ", encoder.get());
     	SmartDashboard.putNumber("Pot: ", pot.getAverageVoltage());
+    	SmartDashboard.putNumber("Gyro Angle: ", gyro1.getAngle());
+    	SmartDashboard.putNumber("Gyro Rate: ", gyro1.getRate());
     	if (encoder.getStopped() == true) {
     		encoder.reset();
     	}
@@ -111,6 +123,25 @@ public class Robot extends IterativeRobot {
     	} else if (stick.getRawButton(3)) {
     		solenoid.set(false);
     	}*/
+    	
+    	if (stick.getRawButton(2)){
+    		servo1.setAngle(0);
+    		int shortest_angle = 0;	
+			int shortest_distance = 999;
+    		for (int i = 0; i<=180; i++){
+    			servo1.setAngle(i);
+    			Timer.delay(.1);
+    			if (ultrasonic.getRangeInches() < shortest_distance){
+    				shortest_angle = (int) servo1.getAngle();
+    				shortest_distance = (int) ultrasonic.getRangeInches();
+    				SmartDashboard.putNumber("Shortest Distance: ", shortest_distance);
+    				SmartDashboard.putNumber("Shortest Angle: ", shortest_angle);
+    			}
+    		}
+    		SmartDashboard.putString("Done searching: ", "yes");
+    		Timer.delay(.25);
+    		servo1.setAngle(shortest_angle);
+    	}
     }
     
     /**
