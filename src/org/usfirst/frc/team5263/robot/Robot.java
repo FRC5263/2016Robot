@@ -50,9 +50,10 @@ public class Robot extends IterativeRobot {
     
     Jaguar leftWheel;
     Jaguar rightWheel;
-    Victor flyWheel;
+    Victor flyWheelRight;
+    Victor flyWheelLeft;
     Victor arm;
-    //Jaguar lift;
+    Jaguar lift;
    
     
     Ultrasonic ultrasonic;
@@ -67,7 +68,7 @@ public class Robot extends IterativeRobot {
     Servo servo2;
     RobotDrive mainDrive;
     CameraServer server;
-    
+    Encoder test;
     
     
     /*private final static String GRIP_CMD =
@@ -89,10 +90,10 @@ public class Robot extends IterativeRobot {
 	    public void pidWrite(double output) {
 	    	leftWheel.set(output);
 	    	rightWheel.set(output) ;
-	    	//myRobot.drive(output, 0); //drive robot from PID output
+	    	
 	    }
     }
-    PIDController pid;
+    PIDController pidGyro;
     final double pGain = 7, iGain = 0, dGain = 0; 
     
     PIDController pidEncoder;
@@ -111,18 +112,19 @@ public class Robot extends IterativeRobot {
         leftWheel = new Jaguar(0);
         leftWheel.setInverted(true);
         rightWheel = new Jaguar(1);
-        flyWheel = new Victor(2);
-        flyWheel.setInverted(true);
-        arm = new Victor(3);
+        flyWheelRight = new Victor(2);
+        flyWheelLeft = new Victor(3);
+        flyWheelRight.setInverted(true);
+        arm = new Victor(4);
         arm.setInverted(true);
-        //lift = new Jaguar(4);
+        lift = new Jaguar(5);
        
         
         ultrasonic = new Ultrasonic(0, 1);
         ultrasonic.setAutomaticMode(true);
         
-        encoder = new Encoder(2, 3, false, Encoder.EncodingType.k1X);
-        encoder.setMinRate(10);
+        //encoder = new Encoder(2, 3, false, Encoder.EncodingType.k1X);
+        //encoder.setMinRate(10);
         
        
         //pot = new AnalogInput(0); //pot in analong port 0
@@ -137,14 +139,19 @@ public class Robot extends IterativeRobot {
         servo2.set(0);
         servo2.setAngle(180);
         //ryan sawinski
+        test = new Encoder(2,3);
+        
         gyroRobot = new ADXRS450_Gyro();
-        gyroArm = new AnalogGyro(0);        
-        pid = new PIDController(pGain, iGain, dGain, gyroRobot, new MyPIDRotationOutput());
-        pidEncoder = new PIDController(pGainE, iGainE, dGainE , encoder, new MyPIDOutputEncoder());
-        pid.disable();
+        gyroArm = new AnalogGyro(0);
+        pidGyro = new PIDController(pGain, iGain, dGain, gyroRobot, new MyPIDRotationOutput());
+        pidEncoder = new PIDController(pGainE, iGainE, dGainE , test, new MyPIDOutputEncoder());
+        pidGyro.disable();
+        /*
         server = CameraServer.getInstance();
         server.setQuality(50);
         server.startAutomaticCapture();
+      	*/
+      
         /* Run GRIP in a new process */
         /*try {
             new ProcessBuilder(GRIP_CMD).inheritIO().start();
@@ -154,7 +161,6 @@ public class Robot extends IterativeRobot {
         NetworkTable.setClientMode();
         NetworkTable.setIPAddress("127.0.0.1");
         NetworkTable.setPort(1735);*/
-        
     }
     
 	/**
@@ -170,13 +176,51 @@ public class Robot extends IterativeRobot {
     	autoSelected = (String) chooser.getSelected();
 //		autoSelected = SmartDashboard.getString("Auto Selector", defaultAuto);
 		System.out.println("Auto selected: " + autoSelected);
+		test.reset();
+		gyroRobot.reset();
+		autonStatus = AutonStatus.DRIVE_FORWARD_300;
     }
     	
     /**
      * This function is called periodically during autonomous
      */
+    public enum AutonStatus {
+    	DRIVE_FORWARD_300, DRIVE_FORWARD_300_1, DRIVE_FORWARD_400, DRIVE_FORWARD_400_1, ROTATE_RIGHT_1,  ROTATE_RIGHT_2, ROTATE_RIGHT_3, STOP
+    }
+    AutonStatus autonStatus;
+    private boolean gyroGo(double angle){
+    	pidGyro.enable();
+		pidGyro.setSetpoint(angle);
+		System.out.println(Double.toString(angle) + autonStatus + "Gyro");
+		if (pidGyro.getError()< 1){
+			Timer.delay(.5);
+			//autonStatus = AutonStatus.DRIVE_FORWARD_400;
+			pidGyro.disable();
+			SmartDashboard.putString("!", autonStatus + " gyro done");
+			test.reset();
+			return true;
+		}
+		return false;
+    }
+    private boolean encoderGo(double distance){
+    	int cRev = 360;
+    	distance = distance / ((8 * Math.PI) / cRev);
+    	pidEncoder.enable();
+		pidEncoder.setSetpoint(distance);
+		System.out.println(Double.toString(distance) + autonStatus + "Encoder");
+		if (pidEncoder.getError() < 1){
+			Timer.delay(.5);
+//			autonStatus = AutonStatus.ROTATE_RIGHT_600;
+			pidEncoder.disable();
+			SmartDashboard.putString("!", autonStatus + " encoder done");
+			test.reset();
+			return true;
+		}
+		return false;
+    }
     public void autonomousPeriodic() {
-    	
+    	SmartDashboard.putNumber("Encoder: ", test.get());
+    	SmartDashboard.putNumber("Gyro: ", gyroRobot.getAngle());
     	/*leftWheel.set(0);
     	rightWheel.set(0);
     	flyWheel.set(0);
@@ -191,12 +235,49 @@ public class Robot extends IterativeRobot {
     	default:
     	//Put default auto code here
             break;
+            
     	}
-    	pid.setSetpoint(90);
-    	pidEncoder.setSetpoint(750);
-    	//pid.getError();
-    	pid.enable();
-    	pidEncoder.enable();
+    	
+    	switch(autonStatus){
+    		case DRIVE_FORWARD_300:
+    			if (encoderGo(400)){
+    				autonStatus = AutonStatus.ROTATE_RIGHT_1;
+    			}
+    			break;
+    		case ROTATE_RIGHT_1:
+    			if (gyroGo(90)){
+    				autonStatus = AutonStatus.DRIVE_FORWARD_400;
+    			}
+    			break;
+    		case DRIVE_FORWARD_400:
+    			if (encoderGo(400)){
+    				autonStatus = AutonStatus.ROTATE_RIGHT_2;
+    			}
+    			break;
+    		case ROTATE_RIGHT_2:
+    			if (gyroGo(180)){
+    				autonStatus = AutonStatus.DRIVE_FORWARD_300_1;
+    			}
+    			break;
+    		case DRIVE_FORWARD_300_1:
+    			if (encoderGo(300)){
+    				autonStatus = AutonStatus.ROTATE_RIGHT_3;
+    			}
+    			break;
+    		case ROTATE_RIGHT_3:
+    			if (gyroGo(270)){
+    				autonStatus = AutonStatus.DRIVE_FORWARD_400_1;
+    			}
+    			break;
+    		case DRIVE_FORWARD_400_1:
+    			if (encoderGo(400)){
+    				autonStatus = AutonStatus.STOP;
+    			}
+    			break;
+    		case STOP:
+    			break;
+    	} 
+ 
     	//grip = NetworkTable.getTable("GRIP");
     	
     
@@ -216,7 +297,6 @@ public class Robot extends IterativeRobot {
     	//motor1.set(stick.getRawAxis(5));
     	
     	//SmartDashboard.putNumber("Sensor", ultrasonic.getRangeInches());
-    	SmartDashboard.putNumber("Encoder: ", encoder.get());
     	//SmartDashboard.putNumber("Pot: ", pot.getAverageVoltage());
     	SmartDashboard.putNumber("Gyro Robot Angle: ", gyroRobot.getAngle());
     	SmartDashboard.putNumber("Gyro Robot Rate: ", gyroRobot.getRate());
@@ -236,11 +316,23 @@ public class Robot extends IterativeRobot {
     	if (shoot.getRawAxis(5) > 0){
     		servo1.setAngle(0);
     		servo2.setAngle(180);
-    		flyWheel.set(shoot.getRawAxis(5) * .65);
+    		flyWheelRight.set(shoot.getRawAxis(5) * .65);
+    		flyWheelLeft.set(shoot.getRawAxis(5) * .65);
     	} else if (shoot.getRawAxis(5) < 0) {
-    		flyWheel.set(shoot.getRawAxis(5));
+    		flyWheelRight.set(shoot.getRawAxis(5));
+    		flyWheelLeft.set(shoot.getRawAxis(5));
     	}
-    	//lift.set(shoot.getRawAxis(5));
+    	 if (stick.getRawButton(4))
+    	 	lift.set(1);
+    	 	
+    	 	else if (stick.getRawButton(1))
+    	 	lift.set(-1);
+    	 
+    	 	else 
+    	 	lift.set(0);
+    	 	
+    	 	
+    	 	
     	
     	if (shoot.getRawButton(2)) {
     		servo1.setAngle(90);
@@ -249,7 +341,7 @@ public class Robot extends IterativeRobot {
     		servo1.setAngle(0);
     		servo2.setAngle(180);
     	}
-    	pid.disable();
+    	pidGyro.disable();
     	pidEncoder.disable();
     	/*
     	if (stick.getRawButton(2)){
