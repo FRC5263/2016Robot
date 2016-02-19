@@ -66,9 +66,10 @@ public class Robot extends IterativeRobot {
     AnalogGyro gyroArm;
     Servo servo1;
     Servo servo2;
-    RobotDrive mainDrive;
+    //RobotDrive mainDrive;
     CameraServer server;
     Encoder test;
+    Encoder encoArm;
     
     
     /*private final static String GRIP_CMD =
@@ -93,11 +94,24 @@ public class Robot extends IterativeRobot {
 	    	
 	    }
     }
+    public class MyPIDOutputEncoderArm implements PIDOutput {
+	    @Override
+	    public void pidWrite(double output) {
+	    	arm.set(output);
+	    	
+	    }
+    }
     PIDController pidGyro;
-    final double pGain = 7, iGain = 0, dGain = 0; 
+    final double pGain = SmartDashboard.getNumber("Gyro P: ", 7), iGain = SmartDashboard.getNumber("Gyro I: ", 0), dGain = 
+    																					SmartDashboard.getNumber("Gyro D: ", 0); 
     
     PIDController pidEncoder;
-    final double pGainE = 7, iGainE = 0, dGainE = 0; 
+    final double pGainE = SmartDashboard.getNumber("Enco P: ", 7), iGainE = SmartDashboard.getNumber("Enco I: ", 0), dGainE = 
+    																					SmartDashboard.getNumber("Enco D: ", 0); 
+    
+    PIDController pidEncoderArm;
+    final double pGainEA = SmartDashboard.getNumber("EncoA P: ", 7), iGainEA = SmartDashboard.getNumber("EncoA I: ", 7), dGainEA = 
+    																					SmartDashboard.getNumber("EncoA D: ", 0); 
 
         @Override
         
@@ -116,7 +130,8 @@ public class Robot extends IterativeRobot {
         flyWheelLeft = new Victor(3);
         flyWheelRight.setInverted(true);
         arm = new Victor(4);
-        arm.setInverted(true);
+        //arm.setInverted(true);
+        encoArm = new Encoder(4, 5);
         lift = new Jaguar(5);
        
         
@@ -141,11 +156,15 @@ public class Robot extends IterativeRobot {
         //ryan sawinski
         test = new Encoder(2,3);
         
+       //mainDrive = new RobotDrive(leftWheel, rightWheel);
+        
         gyroRobot = new ADXRS450_Gyro();
         gyroArm = new AnalogGyro(0);
         pidGyro = new PIDController(pGain, iGain, dGain, gyroRobot, new MyPIDRotationOutput());
         pidEncoder = new PIDController(pGainE, iGainE, dGainE , test, new MyPIDOutputEncoder());
-        pidGyro.disable();
+        pidEncoderArm = new PIDController(pGainE, iGainE, dGainE , encoArm, new MyPIDOutputEncoderArm());
+       // pidFlyWheelRight = new PIDController(pGainE, iGainE, dGainE , flyWheelRight new MyPIDOutputEncoderArm());
+        
         /*
         server = CameraServer.getInstance();
         server.setQuality(50);
@@ -218,14 +237,30 @@ public class Robot extends IterativeRobot {
 		}
 		return false;
     }
-    public void autonomousPeriodic() {
+    @Override
+	public void teleopInit() {
+		// TODO Auto-generated method stub
+		super.teleopInit();
+		pidGyro.disable();
+		pidEncoder.disable();
+		pidEncoderArm.disable();
+	}
+
+	public void autonomousPeriodic() {
     	SmartDashboard.putNumber("Encoder: ", test.get());
     	SmartDashboard.putNumber("Gyro: ", gyroRobot.getAngle());
-    	/*leftWheel.set(0);
-    	rightWheel.set(0);
-    	flyWheel.set(0);
-    	arm.set(0);
-    	servo1.set(0);*/
+    	
+    	SmartDashboard.putNumber("Gyro P:", pidGyro.getP());
+    	SmartDashboard.putNumber("Gyro I:", pidGyro.getI());
+    	SmartDashboard.putNumber("Gyro D:", pidGyro.getD());
+    	
+    	SmartDashboard.putNumber("Enco P:", pidEncoder.getP());
+    	SmartDashboard.putNumber("Enco I:", pidEncoder.getI());
+    	SmartDashboard.putNumber("Enco D:", pidEncoder.getD());
+    	
+    	SmartDashboard.putNumber("EncoA P:", pidEncoderArm.getP());
+    	SmartDashboard.putNumber("EncoA I:", pidEncoderArm.getI());
+    	SmartDashboard.putNumber("EncoA D:", pidEncoderArm.getD());
     	
     	switch(autoSelected) {
     	case customAuto:
@@ -292,6 +327,9 @@ public class Robot extends IterativeRobot {
     /**
      * This function is called periodically during operator control
      */
+	int leftStick = 1;
+	int rightStick = 5;
+    boolean leftyFlippy = true;
     public void teleopPeriodic() {
     	//motor.set(stick.getRawAxis(1));
     	//motor1.set(stick.getRawAxis(5));
@@ -307,9 +345,29 @@ public class Robot extends IterativeRobot {
     	}*/
     	//SmartDashboard.putNumber("Shoot Speed: ", shootSpeed);
     	
-     	//mainDrive.arcadeDrive(stick);
-    	leftWheel.set(stick.getRawAxis(1) * .5);
-    	rightWheel.set(stick.getRawAxis(5) * .5);
+    	if (stick.getRawButton(8)) {
+    		if (leftyFlippy == true){
+    			leftWheel.setInverted(false);
+    			rightWheel.setInverted(true);
+    			leftStick = 5;
+    			rightStick = 1; 
+    			leftyFlippy = false;
+    		}
+    	}
+    	if (stick.getRawButton(7)) {
+    		if (leftyFlippy == false){
+    			leftWheel.setInverted(true);
+    			rightWheel.setInverted(false);
+    			leftStick = 1;
+    			rightStick = 5;
+    			leftyFlippy = true;
+    		}
+    	} 
+     	SmartDashboard.putNumber("Left Joystick: ", stick.getRawAxis(1));
+     	SmartDashboard.putNumber("Right Joystick: ", stick.getRawAxis(5));
+     	leftWheel.set(stick.getRawAxis(leftStick));
+    	rightWheel.set(stick.getRawAxis(rightStick));
+    	//mainDrive.arcadeDrive(stick);
     	
     	arm.set(shoot.getRawAxis(1));
     	SmartDashboard.putNumber("Arm: ", arm.get());
@@ -341,28 +399,7 @@ public class Robot extends IterativeRobot {
     		servo1.setAngle(0);
     		servo2.setAngle(180);
     	}
-    	pidGyro.disable();
-    	pidEncoder.disable();
-    	/*
-    	if (stick.getRawButton(2)){
-    		servo1.setAngle(0);
-    		int shortest_angle = 0;	
-			int shortest_distance = 999;
-    		for (int i = 0; i<=180; i++){
-    			servo1.setAngle(i);
-    			Timer.delay(.1);
-    			if (ultrasonic.getRangeInches() < shortest_distance){
-    				shortest_angle = (int) servo1.getAngle();
-    				shortest_distance = (int) ultrasonic.getRangeInches();
-    				SmartDashboard.putNumber("Shortest Distance: ", shortest_distance);
-    				SmartDashboard.putNumber("Shortest Angle: ", shortest_angle);
-    			}
-    		}
-    		SmartDashboard.putString("Done searching: ", "yes");
-    		Timer.delay(.25);
-    		servo1.setAngle(shortest_angle);
-    	}
-    	*/
+    	
     }
     
     /**
