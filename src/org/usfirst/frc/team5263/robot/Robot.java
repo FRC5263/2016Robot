@@ -9,6 +9,7 @@ import edu.wpi.first.wpilibj.AnalogGyro;
 import edu.wpi.first.wpilibj.CameraServer;
 //import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.Counter;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DigitalOutput;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
@@ -19,6 +20,8 @@ import edu.wpi.first.wpilibj.Jaguar;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PIDController;
 import edu.wpi.first.wpilibj.PIDOutput;
+import edu.wpi.first.wpilibj.PIDSource;
+import edu.wpi.first.wpilibj.PIDSourceType;
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.Servo;
 //import edu.wpi.first.wpilibj.Solenoid;
@@ -48,8 +51,8 @@ public class Robot extends IterativeRobot {
     Joystick stick;
     Joystick shoot;
     
-    Jaguar leftWheel;
-    Jaguar rightWheel;
+    Talon leftWheel;
+    Talon rightWheel;
     Victor flyWheelRight;
     Victor flyWheelLeft;
     Victor arm;
@@ -58,39 +61,30 @@ public class Robot extends IterativeRobot {
     
     Ultrasonic ultrasonic;
     Encoder encoder;
-    //AnalogInput pot;
-    Compressor mainCompressor;
-    DoubleSolenoid solenoid;
-    DoubleSolenoid solenoid1;
     ADXRS450_Gyro gyroRobot;
     AnalogGyro gyroArm;
     Servo servo1;
     Servo servo2;
-    //RobotDrive mainDrive;
+    RobotDrive mainDrive;
     CameraServer server;
     Encoder test;
     Encoder encoArm;
-    
-    
-    /*private final static String GRIP_CMD =
-            "/usr/local/frc/JRE/bin/java -jar /home/lvuser/grip.jar /home/lvuser/project.grip";
+    Counter encoFWL;
+    Counter encoFWR;
 
-        private NetworkTable grip;*/
-
-    
     public class MyPIDRotationOutput implements PIDOutput {
 	    @Override
 	    public void pidWrite(double output) {
-	    	leftWheel.set(output);
-	    	rightWheel.set(output * -1) ;
+	    	leftWheel.set((output) * -1);
+	    	rightWheel.set(output);
 	    	//myRobot.drive(output, 0); //drive robot from PID output
 	    }
     }
     public class MyPIDOutputEncoder implements PIDOutput {
 	    @Override
 	    public void pidWrite(double output) {
-	    	leftWheel.set(output);
-	    	rightWheel.set(output) ;
+	    	rightWheel.set(output * 1);
+	    	leftWheel.set(output * 1);
 	    	
 	    }
     }
@@ -101,18 +95,79 @@ public class Robot extends IterativeRobot {
 	    	
 	    }
     }
+    public class MyPIDOutputFlyWheelLeft implements PIDOutput {
+	    @Override
+	    public void pidWrite(double output) {
+	    	System.out.println("flyWheelLeft.setoutput was" + output);
+	    	flyWheelLeft.set(output);
+
+	    }
+    }
+    public class MyPIDOutputFlyWheelRight implements PIDOutput {
+	    @Override
+	    public void pidWrite(double output) {
+	    	flyWheelRight.set(output);
+	    	
+	    }
+    }
+    public class LeftFWPIDSource implements PIDSource {
+
+		@Override
+		public void setPIDSourceType(PIDSourceType pidSource) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public PIDSourceType getPIDSourceType() {
+			// TODO Auto-generated method stub
+			return PIDSourceType.kRate;
+		}
+
+		@Override
+		public double pidGet() {
+			// TODO Auto-generated method stub
+			return currentRateL;
+		}
+    	
+    }
+    public class RightFWPIDSource implements PIDSource {
+
+		@Override
+		public void setPIDSourceType(PIDSourceType pidSource) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public PIDSourceType getPIDSourceType() {
+			// TODO Auto-generated method stub
+			return PIDSourceType.kRate;
+		}
+
+		@Override
+		public double pidGet() {
+			// TODO Auto-generated method stub
+			System.out.println("HI!!!");
+			return currentRateR;
+		}
+    	
+    }
+    
     PIDController pidGyro;
-    final double pGain = SmartDashboard.getNumber("Gyro P: ", 7), iGain = SmartDashboard.getNumber("Gyro I: ", 0), dGain = 
-    																					SmartDashboard.getNumber("Gyro D: ", 0); 
+    final double pGain = .5, iGain = 0, dGain = 0; 
     
     PIDController pidEncoder;
-    final double pGainE = SmartDashboard.getNumber("Enco P: ", 7), iGainE = SmartDashboard.getNumber("Enco I: ", 0), dGainE = 
-    																					SmartDashboard.getNumber("Enco D: ", 0); 
+    final double pGainE = .001, iGainE = 0, dGainE = 0; 
     
     PIDController pidEncoderArm;
-    final double pGainEA = SmartDashboard.getNumber("EncoA P: ", 7), iGainEA = SmartDashboard.getNumber("EncoA I: ", 7), dGainEA = 
-    																					SmartDashboard.getNumber("EncoA D: ", 0); 
+    final double pGainEA = 7, iGainEA = 0, dGainEA = 0; 
 
+    PIDController pidFlyWheelLeft;
+    final double pGainFWL = .001, iGainFWL = 0, dGainFWL = 0;
+    
+    PIDController pidFlyWheelRight;
+    final double pGainFWR = .001, iGainFWR = 0, dGainFWR = 0; 
         @Override
         
     public void robotInit() {
@@ -123,63 +178,52 @@ public class Robot extends IterativeRobot {
         stick = new Joystick(0);
         shoot = new Joystick(1);
 
-        leftWheel = new Jaguar(0);
+        leftWheel = new Talon(0);
         leftWheel.setInverted(true);
-        rightWheel = new Jaguar(1);
+        rightWheel = new Talon(1);
         flyWheelRight = new Victor(2);
         flyWheelLeft = new Victor(3);
         flyWheelRight.setInverted(true);
         arm = new Victor(4);
-        //arm.setInverted(true);
         encoArm = new Encoder(4, 5);
+        encoFWL = new Counter(0);
+        encoFWR = new Counter(1);
+        
         lift = new Jaguar(5);
        
         
-        ultrasonic = new Ultrasonic(0, 1);
+        ultrasonic = new Ultrasonic(6, 7);
         ultrasonic.setAutomaticMode(true);
         
         //encoder = new Encoder(2, 3, false, Encoder.EncodingType.k1X);
         //encoder.setMinRate(10);
-        
        
-        //pot = new AnalogInput(0); //pot in analong port 0
-        
-        /*mainCompressor = new Compressor(0);
-        mainCompressor.start();
-        solenoid = new DoubleSolenoid(0,1);
-        solenoid1 = new DoubleSolenoid(2,3);*/
         servo1 = new Servo(9);
-        servo1.setAngle(180);
+        //servo1.setAngle(180);
         servo2 = new Servo(8);
-        servo2.set(0);
         servo2.setAngle(180);
         //ryan sawinski
         test = new Encoder(2,3);
+        test.reset();
         
-       //mainDrive = new RobotDrive(leftWheel, rightWheel);
+        mainDrive = new RobotDrive(leftWheel, rightWheel);
         
         gyroRobot = new ADXRS450_Gyro();
         gyroArm = new AnalogGyro(0);
         pidGyro = new PIDController(pGain, iGain, dGain, gyroRobot, new MyPIDRotationOutput());
+        pidGyro.disable();
         pidEncoder = new PIDController(pGainE, iGainE, dGainE , test, new MyPIDOutputEncoder());
+        pidEncoder.disable();
         pidEncoderArm = new PIDController(pGainE, iGainE, dGainE , encoArm, new MyPIDOutputEncoderArm());
-       // pidFlyWheelRight = new PIDController(pGainE, iGainE, dGainE , flyWheelRight new MyPIDOutputEncoderArm());
+        pidFlyWheelLeft = new PIDController(pGainFWL, iGainFWL, dGainFWL , new LeftFWPIDSource(), new MyPIDOutputFlyWheelLeft());
+        pidFlyWheelRight = new PIDController(pGainFWR, iGainFWR, dGainFWR , new RightFWPIDSource(), new MyPIDOutputFlyWheelRight());
         
-        /*
+        
         server = CameraServer.getInstance();
-        server.setQuality(50);
+        server.setQuality(25);
         server.startAutomaticCapture();
-      	*/
-      
-        /* Run GRIP in a new process */
-        /*try {
-            new ProcessBuilder(GRIP_CMD).inheritIO().start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        NetworkTable.setClientMode();
-        NetworkTable.setIPAddress("127.0.0.1");
-        NetworkTable.setPort(1735);*/
+        
+      	
     }
     
 	/**
@@ -211,7 +255,7 @@ public class Robot extends IterativeRobot {
     	pidGyro.enable();
 		pidGyro.setSetpoint(angle);
 		System.out.println(Double.toString(angle) + autonStatus + "Gyro");
-		if (pidGyro.getError()< 1){
+		if (false/*pidGyro.getError()< 1*/){
 			Timer.delay(.5);
 			//autonStatus = AutonStatus.DRIVE_FORWARD_400;
 			pidGyro.disable();
@@ -224,13 +268,13 @@ public class Robot extends IterativeRobot {
     private boolean encoderGo(double distance){
     	int cRev = 360;
     	distance = distance / ((8 * Math.PI) / cRev);
-    	pidEncoder.enable();
-		pidEncoder.setSetpoint(distance);
+    	if (!pidEncoder.isEnabled()) pidEncoder.setSetpoint(distance);
+    	if (!pidEncoder.isEnabled()) pidEncoder.enable();
+		
 		System.out.println(Double.toString(distance) + autonStatus + "Encoder");
 		if (pidEncoder.getError() < 1){
 			Timer.delay(.5);
-//			autonStatus = AutonStatus.ROTATE_RIGHT_600;
-			pidEncoder.disable();
+			//pidEncoder.disable();
 			SmartDashboard.putString("!", autonStatus + " encoder done");
 			test.reset();
 			return true;
@@ -243,12 +287,43 @@ public class Robot extends IterativeRobot {
 		super.teleopInit();
 		pidGyro.disable();
 		pidEncoder.disable();
-		pidEncoderArm.disable();
+		timeStampL = System.currentTimeMillis();
+		timeStampR = System.currentTimeMillis();
+		pidFlyWheelLeft.disable();
+		pidFlyWheelRight.disable();	
 	}
-
+    
+    double timeStampL = System.currentTimeMillis();
+    double currentRateL = 0;
+    public double FlyRPML(double interval) {
+    	
+    	if ((System.currentTimeMillis() - timeStampL) > interval){
+    		double countL = encoFWL.get();
+    		encoFWL.reset();
+    		timeStampL = System.currentTimeMillis();
+    		currentRateL = (((countL * 1000) / interval) * 10); 
+    	}
+    	return currentRateL;
+    }
+    double timeStampR = System.currentTimeMillis();
+    double currentRateR = 0;
+    public double FlyRPMR(double interval) {
+    	//System.out.println(System.currentTimeMillis() - timeStamp);
+    	if ((System.currentTimeMillis() - timeStampR) > interval){
+    		double countR = encoFWR.get();
+    		System.out.println(countR);
+    		encoFWR.reset();
+    		timeStampR = System.currentTimeMillis();
+    		currentRateR = (((countR * 1000) / interval) * 10); 
+    	}
+    	return currentRateR;
+    }
+    
 	public void autonomousPeriodic() {
     	SmartDashboard.putNumber("Encoder: ", test.get());
     	SmartDashboard.putNumber("Gyro: ", gyroRobot.getAngle());
+    	
+    	//pidGyro.setPID(SmartDashboard.getNumber("G P: ", 7), SmartDashboard.getNumber("G I: ", 0), SmartDashboard.getNumber("G D: ", 0));
     	
     	SmartDashboard.putNumber("Gyro P:", pidGyro.getP());
     	SmartDashboard.putNumber("Gyro I:", pidGyro.getI());
@@ -261,6 +336,9 @@ public class Robot extends IterativeRobot {
     	SmartDashboard.putNumber("EncoA P:", pidEncoderArm.getP());
     	SmartDashboard.putNumber("EncoA I:", pidEncoderArm.getI());
     	SmartDashboard.putNumber("EncoA D:", pidEncoderArm.getD());
+    	
+    	SmartDashboard.putNumber("Left: ", leftWheel.get());
+    	SmartDashboard.putNumber("Right: ", rightWheel.get());
     	
     	switch(autoSelected) {
     	case customAuto:
@@ -275,7 +353,7 @@ public class Robot extends IterativeRobot {
     	
     	switch(autonStatus){
     		case DRIVE_FORWARD_300:
-    			if (encoderGo(400)){
+    			if (gyroGo(90)){
     				autonStatus = AutonStatus.ROTATE_RIGHT_1;
     			}
     			break;
@@ -285,7 +363,7 @@ public class Robot extends IterativeRobot {
     			}
     			break;
     		case DRIVE_FORWARD_400:
-    			if (encoderGo(400)){
+    			if (encoderGo(42)){
     				autonStatus = AutonStatus.ROTATE_RIGHT_2;
     			}
     			break;
@@ -295,7 +373,7 @@ public class Robot extends IterativeRobot {
     			}
     			break;
     		case DRIVE_FORWARD_300_1:
-    			if (encoderGo(300)){
+    			if (encoderGo(42)){
     				autonStatus = AutonStatus.ROTATE_RIGHT_3;
     			}
     			break;
@@ -305,21 +383,13 @@ public class Robot extends IterativeRobot {
     			}
     			break;
     		case DRIVE_FORWARD_400_1:
-    			if (encoderGo(400)){
+    			if (encoderGo(42)){
     				autonStatus = AutonStatus.STOP;
     			}
     			break;
     		case STOP:
     			break;
     	} 
- 
-    	//grip = NetworkTable.getTable("GRIP");
-    	
-    
-        /*for (double area : grip.getNumberArray("targets/area", new double[0])) {
-            //System.out.println("Got contour with area=" + area);
-            SmartDashboard.putNumber("Contour=", area);
-        }*/
     }
     
     
@@ -327,75 +397,98 @@ public class Robot extends IterativeRobot {
     /**
      * This function is called periodically during operator control
      */
+	/*
+	private double shootBall(double dist) {
+		test.
+		return dist;
+		
+	}*/
+	double timeStampOff = 0;
 	int leftStick = 1;
 	int rightStick = 5;
+	double speed = 1;
     boolean leftyFlippy = true;
     public void teleopPeriodic() {
-    	//motor.set(stick.getRawAxis(1));
-    	//motor1.set(stick.getRawAxis(5));
-    	
-    	//SmartDashboard.putNumber("Sensor", ultrasonic.getRangeInches());
-    	//SmartDashboard.putNumber("Pot: ", pot.getAverageVoltage());
     	SmartDashboard.putNumber("Gyro Robot Angle: ", gyroRobot.getAngle());
-    	SmartDashboard.putNumber("Gyro Robot Rate: ", gyroRobot.getRate());
-    	SmartDashboard.putNumber("Gyro Arm Angle: ", gyroArm.getAngle());
-    	SmartDashboard.putNumber("Gyro Arm Rate: ", gyroArm.getRate());
-    	/*if (encoder.getStopped() == true) {
-    		encoder.reset();
-    	}*/
-    	//SmartDashboard.putNumber("Shoot Speed: ", shootSpeed);
+    	SmartDashboard.putNumber("Encoder !!!: ", test.get());
+    	SmartDashboard.putNumber("ARM!!!!: ", encoArm.get());
+    	SmartDashboard.putNumber("Time: ", System.currentTimeMillis());
+    	SmartDashboard.putNumber("FWL RPM: ", FlyRPML(250));
+    	SmartDashboard.putNumber("FWR RPM: ", FlyRPMR(250));
+    	SmartDashboard.putNumber("FWL Count: ", encoFWL.get());
+    	SmartDashboard.putNumber("FWR Count: ", encoFWR.get());
+    	SmartDashboard.putNumber("Distance: ", ultrasonic.getRangeInches());
     	
-    	if (stick.getRawButton(8)) {
-    		if (leftyFlippy == true){
-    			leftWheel.setInverted(false);
-    			rightWheel.setInverted(true);
-    			leftStick = 5;
-    			rightStick = 1; 
-    			leftyFlippy = false;
-    		}
+    	if (stick.getRawButton(8)){
+    		leftyFlippy = false;
+    	} else if (stick.getRawButton(7)){
+    		leftyFlippy = true;
     	}
-    	if (stick.getRawButton(7)) {
-    		if (leftyFlippy == false){
-    			leftWheel.setInverted(true);
-    			rightWheel.setInverted(false);
-    			leftStick = 1;
-    			rightStick = 5;
-    			leftyFlippy = true;
+    	
+    	if (leftyFlippy == true){
+    		mainDrive.setSafetyEnabled(false);
+    		rightWheel.setInverted(false);
+    		leftWheel.set(stick.getRawAxis(1));
+    		rightWheel.set(stick.getRawAxis(5));
+    	} else if (leftyFlippy == false){
+    		rightWheel.setInverted(true);
+    		mainDrive.setMaxOutput(.5);
+    		mainDrive.arcadeDrive(stick, 5, stick, 0);
+    	}
+    	
+    	if (shoot.getRawButton(1) /*&& (System.currentTimeMillis()-timeStampOff > 250)*/) {
+    		System.out.println("We in the if fam>>>>>");
+    		if (pidFlyWheelLeft.isEnabled()){
+
+    			System.out.println("Im disabled######");
+    			pidFlyWheelLeft.disable();
+    			pidFlyWheelRight.disable();
+    		} else {
+    			System.out.println("We bout to be enabled:::::");
+    			pidFlyWheelLeft.enable();
+        		pidFlyWheelRight.enable();
+        		pidFlyWheelLeft.setSetpoint(1000);
+        		pidFlyWheelRight.setSetpoint(1000);
+        		
     		}
-    	} 
+    		
+    		timeStampOff = System.currentTimeMillis();
+    		
+    	}
+    	if (((shoot.getRawAxis(5) > .1) || (shoot.getRawAxis(5) < -.1)) && pidFlyWheelLeft.isEnabled()){
+    		pidFlyWheelLeft.disable();
+    		pidFlyWheelRight.disable();
+    	}
+    	
      	SmartDashboard.putNumber("Left Joystick: ", stick.getRawAxis(1));
      	SmartDashboard.putNumber("Right Joystick: ", stick.getRawAxis(5));
-     	leftWheel.set(stick.getRawAxis(leftStick));
-    	rightWheel.set(stick.getRawAxis(rightStick));
+     	
     	//mainDrive.arcadeDrive(stick);
     	
     	arm.set(shoot.getRawAxis(1));
     	SmartDashboard.putNumber("Arm: ", arm.get());
-    	if (shoot.getRawAxis(5) > 0){
+    	if (shoot.getRawAxis(5) > 0 && !pidFlyWheelLeft.isEnabled()){
     		servo1.setAngle(0);
     		servo2.setAngle(180);
-    		flyWheelRight.set(shoot.getRawAxis(5) * .65);
-    		flyWheelLeft.set(shoot.getRawAxis(5) * .65);
-    	} else if (shoot.getRawAxis(5) < 0) {
-    		flyWheelRight.set(shoot.getRawAxis(5));
+    		flyWheelRight.set(shoot.getRawAxis(5) * .5);
+    		flyWheelLeft.set(shoot.getRawAxis(5) * .5);
+    	} else if (shoot.getRawAxis(5) < 0 && !pidFlyWheelLeft.isEnabled()) {
     		flyWheelLeft.set(shoot.getRawAxis(5));
+    		flyWheelRight.set(shoot.getRawAxis(5));
     	}
-    	 if (stick.getRawButton(4))
+    	 if (stick.getRawButton(6))
     	 	lift.set(1);
     	 	
-    	 	else if (stick.getRawButton(1))
+    	 	else if (stick.getRawButton(5))
     	 	lift.set(-1);
     	 
-    	 	else 
+    	 	else
     	 	lift.set(0);
     	 	
-    	 	
-    	 	
-    	
-    	if (shoot.getRawButton(2)) {
+    	if (shoot.getRawButton(6)) {
     		servo1.setAngle(90);
     		servo2.setAngle(90);
-    	} else if(shoot.getRawButton(3)) {
+    	} else if(shoot.getRawButton(5)) {
     		servo1.setAngle(0);
     		servo2.setAngle(180);
     	}
