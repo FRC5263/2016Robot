@@ -57,6 +57,7 @@ public class Robot extends IterativeRobot {
     Victor flyWheelLeft;
     Victor arm;
     Jaguar lift;
+    Jaguar pin;
    
     
     Ultrasonic ultrasonic;
@@ -223,7 +224,7 @@ public class Robot extends IterativeRobot {
         server.setQuality(25);
         server.startAutomaticCapture();
         
-      	
+      	pin = new Jaguar(7);
     }
     
 	/**
@@ -493,6 +494,13 @@ public class Robot extends IterativeRobot {
     		servo2.setAngle(180);
     	}
     	
+    	if (shoot.getRawButton(3)){
+    		pin.set(1);
+    	}else if(shoot.getRawButton(1)){
+    		pin.set(-1);
+    	}else{
+    		pin.set(0);
+    	}
     }
     
     /**
