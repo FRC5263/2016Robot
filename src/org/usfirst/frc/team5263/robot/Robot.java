@@ -44,10 +44,10 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  * directory.
  */
 public class Robot extends IterativeRobot {
-    final String defaultAuto = "Default";
+	final String defaultAuto = "Default";
     final String customAuto = "My Auto";
     String autoSelected;
-    SendableChooser chooser;
+    
     Joystick stick;
     Joystick shoot;
     
@@ -59,7 +59,6 @@ public class Robot extends IterativeRobot {
     Jaguar lift;
     Jaguar pin;
    
-    
     Ultrasonic ultrasonic;
     Encoder encoder;
     ADXRS450_Gyro gyroRobot;
@@ -172,10 +171,6 @@ public class Robot extends IterativeRobot {
         @Override
         
     public void robotInit() {
-        chooser = new SendableChooser();
-        chooser.addDefault("Default Auto", defaultAuto);
-        chooser.addObject("My Auto", customAuto);
-        SmartDashboard.putData("Auto choices", chooser);
         stick = new Joystick(0);
         shoot = new Joystick(1);
 
@@ -191,7 +186,6 @@ public class Robot extends IterativeRobot {
         encoFWR = new Counter(1);
         
         lift = new Jaguar(5);
-       
         
         ultrasonic = new Ultrasonic(6, 7);
         ultrasonic.setAutomaticMode(true);
@@ -219,12 +213,8 @@ public class Robot extends IterativeRobot {
         pidFlyWheelLeft = new PIDController(pGainFWL, iGainFWL, dGainFWL , new LeftFWPIDSource(), new MyPIDOutputFlyWheelLeft());
         pidFlyWheelRight = new PIDController(pGainFWR, iGainFWR, dGainFWR , new RightFWPIDSource(), new MyPIDOutputFlyWheelRight());
         
-        
-        server = CameraServer.getInstance();
-        server.setQuality(25);
-        server.startAutomaticCapture();
-        
       	pin = new Jaguar(7);
+        
     }
     
 	/**
@@ -237,19 +227,17 @@ public class Robot extends IterativeRobot {
 	 * If using the SendableChooser make sure to add them to the chooser code above as well.
 	 */
     public void autonomousInit() {
-    	autoSelected = (String) chooser.getSelected();
-//		autoSelected = SmartDashboard.getString("Auto Selector", defaultAuto);
-		System.out.println("Auto selected: " + autoSelected);
-		test.reset();
+    	test.reset();
+		//	encoArm.reset();
 		gyroRobot.reset();
-		autonStatus = AutonStatus.DRIVE_FORWARD_300;
+		autonStatus = AutonStatus.ARM_DOWN;
     }
     	
     /**
      * This function is called periodically during autonomous
      */
     public enum AutonStatus {
-    	DRIVE_FORWARD_300, DRIVE_FORWARD_300_1, DRIVE_FORWARD_400, DRIVE_FORWARD_400_1, ROTATE_RIGHT_1,  ROTATE_RIGHT_2, ROTATE_RIGHT_3, STOP
+    	ARM_DOWN, DRIVE_FORWARD_300_1, DRIVE_FORWARD_400, DRIVE_FORWARD_400_1, ROTATE_RIGHT_1,  ROTATE_RIGHT_2, ROTATE_RIGHT_3, STOP
     }
     AutonStatus autonStatus;
     private boolean gyroGo(double angle){
@@ -282,6 +270,9 @@ public class Robot extends IterativeRobot {
 		}
 		return false;
     }
+    
+    //	roboMove Here
+    //	armGo Here
     @Override
 	public void teleopInit() {
 		// TODO Auto-generated method stub
@@ -319,99 +310,108 @@ public class Robot extends IterativeRobot {
     	}
     	return currentRateR;
     }
-    
+    //	currentTimeMillis Here
+    private boolean roboMove(double time, double timeLapse, double speed){
+    	leftWheel.set(speed);
+    	rightWheel.set(speed);
+    	System.out.println(System.currentTimeMillis() - timeLapse);
+    	if ((System.currentTimeMillis() - timeLapse) > time){
+    		leftWheel.set(0);
+    		rightWheel.set(0);
+    		return true;
+    	}
+    	return false;
+    }
+    private boolean armGo(double value){
+    	pidEncoderArm.enable();
+    	pidEncoderArm.setSetpoint(value);
+    	if (pidEncoderArm.getError() < 50){
+    		Timer.delay(.5);
+    		pidEncoderArm.disable();
+    		encoArm.reset();
+    		pidEncoderArm.disable();
+    		
+    		return true;
+    	}
+    	return false;
+    }
+    double currentTime = System.currentTimeMillis();
 	public void autonomousPeriodic() {
     	SmartDashboard.putNumber("Encoder: ", test.get());
     	SmartDashboard.putNumber("Gyro: ", gyroRobot.getAngle());
-    	
-    	//pidGyro.setPID(SmartDashboard.getNumber("G P: ", 7), SmartDashboard.getNumber("G I: ", 0), SmartDashboard.getNumber("G D: ", 0));
-    	
-    	SmartDashboard.putNumber("Gyro P:", pidGyro.getP());
-    	SmartDashboard.putNumber("Gyro I:", pidGyro.getI());
-    	SmartDashboard.putNumber("Gyro D:", pidGyro.getD());
-    	
-    	SmartDashboard.putNumber("Enco P:", pidEncoder.getP());
-    	SmartDashboard.putNumber("Enco I:", pidEncoder.getI());
-    	SmartDashboard.putNumber("Enco D:", pidEncoder.getD());
-    	
-    	SmartDashboard.putNumber("EncoA P:", pidEncoderArm.getP());
-    	SmartDashboard.putNumber("EncoA I:", pidEncoderArm.getI());
-    	SmartDashboard.putNumber("EncoA D:", pidEncoderArm.getD());
     	
     	SmartDashboard.putNumber("Left: ", leftWheel.get());
     	SmartDashboard.putNumber("Right: ", rightWheel.get());
     	
     	switch(autoSelected) {
     	case customAuto:
+    		switch(autonStatus){
+    		case ARM_DOWN:
+    			if (armGo(3414)){ //3414
+    				currentTime = System.currentTimeMillis();
+    				autonStatus = AutonStatus.ROTATE_RIGHT_1;
+    			}
+    			break;
+    		case ROTATE_RIGHT_1:
+    			if (roboMove(4500, currentTime, .5)){
+    				currentTime = System.currentTimeMillis();
+    				autonStatus = AutonStatus.STOP;
+    			}
+    			break;
+    		case DRIVE_FORWARD_400:
+    			if (roboMove(3000, currentTime, -1)){
+    				autonStatus = AutonStatus.STOP;
+    			}
+    			break;
+    	    }
         //Put custom auto code here   
             break;
     	case defaultAuto:
     	default:
+    		switch(autonStatus){
+    		case ARM_DOWN:
+    			if (armGo(1707)){ //3414
+    				currentTime = System.currentTimeMillis();
+    				autonStatus = AutonStatus.ROTATE_RIGHT_1;
+    			}
+    			break;
+    		case ROTATE_RIGHT_1:
+    			if (roboMove(1750, currentTime, -1)){
+    				currentTime = System.currentTimeMillis();
+    				autonStatus = AutonStatus.STOP;
+    			}
+    			break;
+    		case DRIVE_FORWARD_400:
+    			if (roboMove(3000, currentTime, -1)){
+    				autonStatus = AutonStatus.STOP;
+    			}
+    			break;
+    	    }
     	//Put default auto code here
             break;
             
     	}
     	
-    	switch(autonStatus){
-    		case DRIVE_FORWARD_300:
-    			if (gyroGo(90)){
-    				autonStatus = AutonStatus.ROTATE_RIGHT_1;
-    			}
-    			break;
-    		case ROTATE_RIGHT_1:
-    			if (gyroGo(90)){
-    				autonStatus = AutonStatus.DRIVE_FORWARD_400;
-    			}
-    			break;
-    		case DRIVE_FORWARD_400:
-    			if (encoderGo(42)){
-    				autonStatus = AutonStatus.ROTATE_RIGHT_2;
-    			}
-    			break;
-    		case ROTATE_RIGHT_2:
-    			if (gyroGo(180)){
-    				autonStatus = AutonStatus.DRIVE_FORWARD_300_1;
-    			}
-    			break;
-    		case DRIVE_FORWARD_300_1:
-    			if (encoderGo(42)){
-    				autonStatus = AutonStatus.ROTATE_RIGHT_3;
-    			}
-    			break;
-    		case ROTATE_RIGHT_3:
-    			if (gyroGo(270)){
-    				autonStatus = AutonStatus.DRIVE_FORWARD_400_1;
-    			}
-    			break;
-    		case DRIVE_FORWARD_400_1:
-    			if (encoderGo(42)){
-    				autonStatus = AutonStatus.STOP;
-    			}
-    			break;
-    		case STOP:
-    			break;
-    	} 
-    }
-    
+	}
     
 
     /**
      * This function is called periodically during operator control
      */
-	/*
-	private double shootBall(double dist) {
-		test.
-		return dist;
-		
-	}*/
+	
 	double timeStampOff = 0;
 	int leftStick = 1;
 	int rightStick = 5;
 	double speed = 1;
     boolean leftyFlippy = true;
+    //	doubleBrake here
+    //	NIVision Rect here
     public void teleopPeriodic() {
+    	//	NIVison here
+    	//	Camera get Instance here
     	SmartDashboard.putNumber("Gyro Robot Angle: ", gyroRobot.getAngle());
     	SmartDashboard.putNumber("Encoder !!!: ", test.get());
+    	// EncoArm.reset here
     	SmartDashboard.putNumber("ARM!!!!: ", encoArm.get());
     	SmartDashboard.putNumber("Time: ", System.currentTimeMillis());
     	SmartDashboard.putNumber("FWL RPM: ", FlyRPML(250));
@@ -420,12 +420,15 @@ public class Robot extends IterativeRobot {
     	SmartDashboard.putNumber("FWR Count: ", encoFWR.get());
     	SmartDashboard.putNumber("Distance: ", ultrasonic.getRangeInches());
     	
+    	//armGo(3414) here
     	if (stick.getRawButton(8)){
     		leftyFlippy = false;
     	} else if (stick.getRawButton(7)){
     		leftyFlippy = true;
     	}
+    	//	brake = (1 - stick.getRawAxis(3));
     	
+    	//this if statement is different
     	if (leftyFlippy == true){
     		mainDrive.setSafetyEnabled(false);
     		rightWheel.setInverted(false);
@@ -435,30 +438,6 @@ public class Robot extends IterativeRobot {
     		rightWheel.setInverted(true);
     		mainDrive.setMaxOutput(.5);
     		mainDrive.arcadeDrive(stick, 5, stick, 0);
-    	}
-    	
-    	if (shoot.getRawButton(1) /*&& (System.currentTimeMillis()-timeStampOff > 250)*/) {
-    		System.out.println("We in the if fam>>>>>");
-    		if (pidFlyWheelLeft.isEnabled()){
-
-    			System.out.println("Im disabled######");
-    			pidFlyWheelLeft.disable();
-    			pidFlyWheelRight.disable();
-    		} else {
-    			System.out.println("We bout to be enabled:::::");
-    			pidFlyWheelLeft.enable();
-        		pidFlyWheelRight.enable();
-        		pidFlyWheelLeft.setSetpoint(1000);
-        		pidFlyWheelRight.setSetpoint(1000);
-        		
-    		}
-    		
-    		timeStampOff = System.currentTimeMillis();
-    		
-    	}
-    	if (((shoot.getRawAxis(5) > .1) || (shoot.getRawAxis(5) < -.1)) && pidFlyWheelLeft.isEnabled()){
-    		pidFlyWheelLeft.disable();
-    		pidFlyWheelRight.disable();
     	}
     	
      	SmartDashboard.putNumber("Left Joystick: ", stick.getRawAxis(1));
