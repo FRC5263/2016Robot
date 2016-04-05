@@ -30,6 +30,8 @@ import edu.wpi.first.wpilibj.Timer;
 //import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.Ultrasonic;
 import edu.wpi.first.wpilibj.Victor;
+import edu.wpi.first.wpilibj.command.Command;
+import edu.wpi.first.wpilibj.command.Scheduler;
 import edu.wpi.first.wpilibj.interfaces.Gyro;
 import edu.wpi.first.wpilibj.networktables.NetworkTable;
 //import edu.wpi.first.wpilibj.interfaces.Gyro;
@@ -44,9 +46,12 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  * directory.
  */
 public class Robot extends IterativeRobot {
-	final String defaultAuto = "Default";
-    final String customAuto = "My Auto";
-    String autoSelected;
+	Command autonomousCommand;
+	SendableChooser autoChooser;
+	
+	final String defaultAuto = "defaultAuto";
+    final String customAuto = "customAuto";
+    String autoSelected = defaultAuto;
     
     Joystick stick;
     Joystick shoot;
@@ -171,6 +176,11 @@ public class Robot extends IterativeRobot {
         @Override
         
     public void robotInit() {
+        autoChooser = new SendableChooser();
+        autoChooser.addDefault("Default auton", defaultAuto);
+        autoChooser.addObject("Low bar", customAuto);
+        SmartDashboard.putData("Autonomous mode Chooser", autoChooser);
+        
         stick = new Joystick(0);
         shoot = new Joystick(1);
 
@@ -227,10 +237,15 @@ public class Robot extends IterativeRobot {
 	 * If using the SendableChooser make sure to add them to the chooser code above as well.
 	 */
     public void autonomousInit() {
-    	test.reset();
-		//	encoArm.reset();
-		gyroRobot.reset();
+    	mainDrive.free();
+    	mainDrive.setSafetyEnabled(false);
+    	System.out.println("Auto selected: " + autoSelected);
+		test.reset();
+		encoArm.reset();
+//		gyroRobot.reset();
+		autoSelected = (String) autoChooser.getSelected();
 		autonStatus = AutonStatus.ARM_DOWN;
+		currentTime = System.currentTimeMillis();
     }
     	
     /**
@@ -251,7 +266,7 @@ public class Robot extends IterativeRobot {
 			SmartDashboard.putString("!", autonStatus + " gyro done");
 			test.reset();
 			return true;
-		}
+		}	
 		return false;
     }
     private boolean encoderGo(double distance){
@@ -276,6 +291,8 @@ public class Robot extends IterativeRobot {
     @Override
 	public void teleopInit() {
 		// TODO Auto-generated method stub
+    	
+    	mainDrive.free();
 		super.teleopInit();
 		pidGyro.disable();
 		pidEncoder.disable();
@@ -311,6 +328,7 @@ public class Robot extends IterativeRobot {
     	return currentRateR;
     }
     //	currentTimeMillis Here
+    
     private boolean roboMove(double time, double timeLapse, double speed){
     	leftWheel.set(speed);
     	rightWheel.set(speed);
@@ -336,8 +354,12 @@ public class Robot extends IterativeRobot {
     	return false;
     }
     double currentTime = System.currentTimeMillis();
+    
 	public void autonomousPeriodic() {
-    	SmartDashboard.putNumber("Encoder: ", test.get());
+		Scheduler.getInstance().run();
+    	System.out.println("In autonperiodic");
+    	SmartDashboard.putString("||", "hello");
+		SmartDashboard.putNumber("Encoder: ", test.get());
     	SmartDashboard.putNumber("Gyro: ", gyroRobot.getAngle());
     	
     	SmartDashboard.putNumber("Left: ", leftWheel.get());
@@ -347,12 +369,14 @@ public class Robot extends IterativeRobot {
     	case customAuto:
     		switch(autonStatus){
     		case ARM_DOWN:
+    			System.out.println("HIIIIIIIII");
     			if (armGo(3414)){ //3414
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.ROTATE_RIGHT_1;
     			}
     			break;
     		case ROTATE_RIGHT_1:
+    			System.out.println("gjdklas;gjkldf;s");
     			if (roboMove(4500, currentTime, .5)){
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.STOP;
@@ -370,12 +394,14 @@ public class Robot extends IterativeRobot {
     	default:
     		switch(autonStatus){
     		case ARM_DOWN:
+    			System.out.print("In ARM_DOWN");
     			if (armGo(1707)){ //3414
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.ROTATE_RIGHT_1;
     			}
     			break;
     		case ROTATE_RIGHT_1:
+    			System.out.println("In rotate_right");
     			if (roboMove(1750, currentTime, -1)){
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.STOP;
@@ -404,7 +430,7 @@ public class Robot extends IterativeRobot {
 	int rightStick = 5;
 	double speed = 1;
     boolean leftyFlippy = true;
-    //	doubleBrake here
+    double brake = 1;
     //	NIVision Rect here
     public void teleopPeriodic() {
     	//	NIVison here
@@ -426,17 +452,17 @@ public class Robot extends IterativeRobot {
     	} else if (stick.getRawButton(7)){
     		leftyFlippy = true;
     	}
-    	//	brake = (1 - stick.getRawAxis(3));
+    	brake = (1 - stick.getRawAxis(3));
     	
-    	//this if statement is different
     	if (leftyFlippy == true){
     		mainDrive.setSafetyEnabled(false);
     		rightWheel.setInverted(false);
-    		leftWheel.set(stick.getRawAxis(1));
-    		rightWheel.set(stick.getRawAxis(5));
+
+    		leftWheel.set(stick.getRawAxis(1) * brake);
+    		rightWheel.set(stick.getRawAxis(5) * brake);
     	} else if (leftyFlippy == false){
     		rightWheel.setInverted(true);
-    		mainDrive.setMaxOutput(.5);
+    		mainDrive.setMaxOutput(brake);
     		mainDrive.arcadeDrive(stick, 5, stick, 0);
     	}
     	
