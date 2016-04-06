@@ -51,6 +51,7 @@ public class Robot extends IterativeRobot {
 	
 	final String defaultAuto = "defaultAuto";
     final String customAuto = "customAuto";
+    final String nothing = "nothing";
     String autoSelected = defaultAuto;
     
     Joystick stick;
@@ -74,8 +75,8 @@ public class Robot extends IterativeRobot {
     CameraServer server;
     Encoder test;
     Encoder encoArm;
-    Counter encoFWL;
-    Counter encoFWR;
+//    Counter encoFWL;
+//    Counter encoFWR;
 
     public class MyPIDRotationOutput implements PIDOutput {
 	    @Override
@@ -115,49 +116,6 @@ public class Robot extends IterativeRobot {
 	    	
 	    }
     }
-    public class LeftFWPIDSource implements PIDSource {
-
-		@Override
-		public void setPIDSourceType(PIDSourceType pidSource) {
-			// TODO Auto-generated method stub
-			
-		}
-
-		@Override
-		public PIDSourceType getPIDSourceType() {
-			// TODO Auto-generated method stub
-			return PIDSourceType.kRate;
-		}
-
-		@Override
-		public double pidGet() {
-			// TODO Auto-generated method stub
-			return currentRateL;
-		}
-    	
-    }
-    public class RightFWPIDSource implements PIDSource {
-
-		@Override
-		public void setPIDSourceType(PIDSourceType pidSource) {
-			// TODO Auto-generated method stub
-			
-		}
-
-		@Override
-		public PIDSourceType getPIDSourceType() {
-			// TODO Auto-generated method stub
-			return PIDSourceType.kRate;
-		}
-
-		@Override
-		public double pidGet() {
-			// TODO Auto-generated method stub
-			System.out.println("HI!!!");
-			return currentRateR;
-		}
-    	
-    }
     
     PIDController pidGyro;
     final double pGain = .5, iGain = 0, dGain = 0; 
@@ -168,17 +126,13 @@ public class Robot extends IterativeRobot {
     PIDController pidEncoderArm;
     final double pGainEA = 7, iGainEA = 0, dGainEA = 0; 
 
-    PIDController pidFlyWheelLeft;
-    final double pGainFWL = .001, iGainFWL = 0, dGainFWL = 0;
-    
-    PIDController pidFlyWheelRight;
-    final double pGainFWR = .001, iGainFWR = 0, dGainFWR = 0; 
         @Override
         
     public void robotInit() {
         autoChooser = new SendableChooser();
-        autoChooser.addDefault("Default auton", defaultAuto);
+        autoChooser.addDefault("Nothing", nothing);
         autoChooser.addObject("Low bar", customAuto);
+        autoChooser.addObject("Dukes of hazard", defaultAuto);
         SmartDashboard.putData("Autonomous mode Chooser", autoChooser);
         
         stick = new Joystick(0);
@@ -192,8 +146,8 @@ public class Robot extends IterativeRobot {
         flyWheelRight.setInverted(true);
         arm = new Victor(4);
         encoArm = new Encoder(4, 5);
-        encoFWL = new Counter(0);
-        encoFWR = new Counter(1);
+//        encoFWL = new Counter(0);
+//        encoFWR = new Counter(1);
         
         lift = new Jaguar(5);
         
@@ -220,11 +174,12 @@ public class Robot extends IterativeRobot {
         pidEncoder = new PIDController(pGainE, iGainE, dGainE , test, new MyPIDOutputEncoder());
         pidEncoder.disable();
         pidEncoderArm = new PIDController(pGainE, iGainE, dGainE , encoArm, new MyPIDOutputEncoderArm());
-        pidFlyWheelLeft = new PIDController(pGainFWL, iGainFWL, dGainFWL , new LeftFWPIDSource(), new MyPIDOutputFlyWheelLeft());
-        pidFlyWheelRight = new PIDController(pGainFWR, iGainFWR, dGainFWR , new RightFWPIDSource(), new MyPIDOutputFlyWheelRight());
         
       	pin = new Jaguar(7);
         
+      	server = CameraServer.getInstance();
+      	server.setQuality(25);
+      	server.startAutomaticCapture();
     }
     
 	/**
@@ -252,7 +207,7 @@ public class Robot extends IterativeRobot {
      * This function is called periodically during autonomous
      */
     public enum AutonStatus {
-    	ARM_DOWN, DRIVE_FORWARD_300_1, DRIVE_FORWARD_400, DRIVE_FORWARD_400_1, ROTATE_RIGHT_1,  ROTATE_RIGHT_2, ROTATE_RIGHT_3, STOP
+    	ARM_DOWN, SHOOT, DRIVE_FORWARD_300_1, DRIVE_FORWARD_400, ROTATE_RIGHT_1, ROTATE_RIGHT_2, STOP
     }
     AutonStatus autonStatus;
     private boolean gyroGo(double angle){
@@ -291,45 +246,17 @@ public class Robot extends IterativeRobot {
     @Override
 	public void teleopInit() {
 		// TODO Auto-generated method stub
-    	
+    	mainDrive.setSafetyEnabled(false);
     	mainDrive.free();
 		super.teleopInit();
 		pidGyro.disable();
 		pidEncoder.disable();
-		timeStampL = System.currentTimeMillis();
-		timeStampR = System.currentTimeMillis();
-		pidFlyWheelLeft.disable();
-		pidFlyWheelRight.disable();	
 	}
     
     double timeStampL = System.currentTimeMillis();
     double currentRateL = 0;
-    public double FlyRPML(double interval) {
-    	
-    	if ((System.currentTimeMillis() - timeStampL) > interval){
-    		double countL = encoFWL.get();
-    		encoFWL.reset();
-    		timeStampL = System.currentTimeMillis();
-    		currentRateL = (((countL * 1000) / interval) * 10); 
-    	}
-    	return currentRateL;
-    }
-    double timeStampR = System.currentTimeMillis();
-    double currentRateR = 0;
-    public double FlyRPMR(double interval) {
-    	//System.out.println(System.currentTimeMillis() - timeStamp);
-    	if ((System.currentTimeMillis() - timeStampR) > interval){
-    		double countR = encoFWR.get();
-    		System.out.println(countR);
-    		encoFWR.reset();
-    		timeStampR = System.currentTimeMillis();
-    		currentRateR = (((countR * 1000) / interval) * 10); 
-    	}
-    	return currentRateR;
-    }
-    //	currentTimeMillis Here
     
-    private boolean roboMove(double time, double timeLapse, double speed){
+    private boolean roboMove(double time, double timeLapse, double leftSpeed, double rightSpeed){
     	leftWheel.set(speed);
     	rightWheel.set(speed);
     	System.out.println(System.currentTimeMillis() - timeLapse);
@@ -366,49 +293,54 @@ public class Robot extends IterativeRobot {
     	SmartDashboard.putNumber("Right: ", rightWheel.get());
     	
     	switch(autoSelected) {
+    	case nothing:
+    		switch(autonStatus){
+    		case ARM_DOWN:
+    			System.out.println("Im doing nothing");
+    	    }
+        //Put custom auto code here   
+            break;
     	case customAuto:
     		switch(autonStatus){
     		case ARM_DOWN:
-    			System.out.println("HIIIIIIIII");
-    			if (armGo(3414)){ //3414
+    			System.out.println("This is low bar");
+    			if (armGo(3300)){ //3414
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.ROTATE_RIGHT_1;
     			}
     			break;
     		case ROTATE_RIGHT_1:
-    			System.out.println("gjdklas;gjkldf;s");
-    			if (roboMove(4500, currentTime, .5)){
+    			if (roboMove(4500, currentTime, .5, .5)){
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.STOP;
     			}
     			break;
-    		case DRIVE_FORWARD_400:
-    			if (roboMove(3000, currentTime, -1)){
-    				autonStatus = AutonStatus.STOP;
+    		case ROTATE_RIGHT_2:
+    			if (roboMove(1000, currentTime, .5, -.5)){
+    				currentTime = System.currentTimeMillis();
+    				autonStatus = autonStatus.STOP;
     			}
     			break;
+    		case SHOOT:
+    			
+    			break;
     	    }
+    		
         //Put custom auto code here   
             break;
     	case defaultAuto:
     	default:
     		switch(autonStatus){
     		case ARM_DOWN:
-    			System.out.print("In ARM_DOWN");
+    			System.out.print("Dukes of hazard");
     			if (armGo(1707)){ //3414
     				currentTime = System.currentTimeMillis();
     				autonStatus = AutonStatus.ROTATE_RIGHT_1;
     			}
     			break;
     		case ROTATE_RIGHT_1:
-    			System.out.println("In rotate_right");
-    			if (roboMove(1750, currentTime, -1)){
+    			if (roboMove(1750, currentTime, -1, -1)){
     				currentTime = System.currentTimeMillis();
-    				autonStatus = AutonStatus.STOP;
-    			}
-    			break;
-    		case DRIVE_FORWARD_400:
-    			if (roboMove(3000, currentTime, -1)){
     				autonStatus = AutonStatus.STOP;
     			}
     			break;
@@ -440,11 +372,18 @@ public class Robot extends IterativeRobot {
     	// EncoArm.reset here
     	SmartDashboard.putNumber("ARM!!!!: ", encoArm.get());
     	SmartDashboard.putNumber("Time: ", System.currentTimeMillis());
-    	SmartDashboard.putNumber("FWL RPM: ", FlyRPML(250));
-    	SmartDashboard.putNumber("FWR RPM: ", FlyRPMR(250));
-    	SmartDashboard.putNumber("FWL Count: ", encoFWL.get());
-    	SmartDashboard.putNumber("FWR Count: ", encoFWR.get());
     	SmartDashboard.putNumber("Distance: ", ultrasonic.getRangeInches());
+    	
+    	SmartDashboard.putNumber("Arm: ", arm.get());
+    	if (shoot.getRawAxis(5) > 0){
+    		servo1.setAngle(0);
+    		servo2.setAngle(180);
+    		flyWheelRight.set(shoot.getRawAxis(5) * .45);
+    		flyWheelLeft.set(shoot.getRawAxis(5) * .45);
+    	} else if (shoot.getRawAxis(5) < 0) {
+    		flyWheelLeft.set(shoot.getRawAxis(5));
+    		flyWheelRight.set(shoot.getRawAxis(5));
+    	}
     	
     	//armGo(3414) here
     	if (stick.getRawButton(8)){
@@ -473,15 +412,7 @@ public class Robot extends IterativeRobot {
     	
     	arm.set(shoot.getRawAxis(1));
     	SmartDashboard.putNumber("Arm: ", arm.get());
-    	if (shoot.getRawAxis(5) > 0 && !pidFlyWheelLeft.isEnabled()){
-    		servo1.setAngle(0);
-    		servo2.setAngle(180);
-    		flyWheelRight.set(shoot.getRawAxis(5) * .5);
-    		flyWheelLeft.set(shoot.getRawAxis(5) * .5);
-    	} else if (shoot.getRawAxis(5) < 0 && !pidFlyWheelLeft.isEnabled()) {
-    		flyWheelLeft.set(shoot.getRawAxis(5));
-    		flyWheelRight.set(shoot.getRawAxis(5));
-    	}
+ 
     	 if (stick.getRawButton(6))
     	 	lift.set(1);
     	 	
